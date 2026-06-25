@@ -95,9 +95,9 @@
   .trumpf button { flex: 1; font-size: 34px; }
   .trumpf button.active { background: #36b37e; color: #fff; }
 
-  /* Spieler-Buttons (untereinander rechts) */
+  /* Spieler-Buttons (untereinander links) */
   .assign {
-    flex: 0 0 260px;
+    flex: 0 0 230px;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -105,6 +105,63 @@
   .assign button { flex: 1; font-size: 26px; line-height: 1.2; }
   .assign .allein { background: #4f8cff; }
   .assign .gegen  { background: #ff8a4f; }
+
+  /* Historie (rechts) */
+  .history {
+    flex: 0 0 230px;
+    background: #262c38;
+    border-radius: 16px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow: hidden;
+  }
+  .history .h-title {
+    flex: 0 0 auto;
+    font-size: 15px;
+    opacity: 0.7;
+    text-align: center;
+    margin-bottom: 2px;
+  }
+  .history .h-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow: hidden;
+  }
+  .hist-head,
+  .hist-item {
+    display: grid;
+    grid-template-columns: 26px 1fr 1fr 26px;
+    align-items: center;
+    gap: 4px;
+  }
+  .hist-head {
+    flex: 0 0 auto;
+    font-size: 13px;
+    opacity: 0.75;
+    padding: 0 10px 2px;
+  }
+  .hist-item {
+    flex: 0 0 auto;
+    background: #3a4254;
+    border-radius: 10px;
+    padding: 7px 10px;
+    font-size: 19px;
+    font-variant-numeric: tabular-nums;
+  }
+  .hist-item .no,
+  .hist-head .no { opacity: 0.55; font-size: 14px; }
+  .hist-item .a,
+  .hist-head .a { color: #4f8cff; text-align: right; font-weight: 600; }
+  .hist-item .g,
+  .hist-head .g { color: #ff8a4f; text-align: right; font-weight: 600; }
+  .hist-item .t,
+  .hist-head .t { text-align: right; opacity: 0.7; font-size: 14px; }
+  .hist-head .a,
+  .hist-head .g { font-weight: 500; }
 </style>
 </head>
 <body>
@@ -153,6 +210,17 @@
       <button data-trumpf="2">2</button>
       <button data-trumpf="3">3</button>
     </div>
+
+    <div class="history">
+      <div class="h-title">Historie</div>
+      <div class="hist-head">
+        <span class="no">#</span>
+        <span class="a">Allein</span>
+        <span class="g">Gegen</span>
+        <span class="t">T</span>
+      </div>
+      <div class="h-list" id="histList"></div>
+    </div>
   </div>
 
 </div>
@@ -165,12 +233,17 @@
   let selTens = null;   // 10, 20 oder 30
   let selUnit = null;   // 1 bis 9
   let trumpf = 0;       // Trümpfe der aktuellen Runde (0-3)
+  let history = [];     // letzte Runden, max. 11
+  let roundCounter = 0; // laufende Rundennummer
+
+  const MAX_HISTORY = 11;
 
   const allEl    = document.getElementById('scoreAllein');
   const gegEl    = document.getElementById('scoreGegen');
   const trTotEl  = document.getElementById('trumpfTotal');
   const trumpfOpts = document.getElementById('trumpfOpts');
   const padBtns  = document.querySelectorAll('.pad button');
+  const histList = document.getElementById('histList');
 
   function entryValue() {
     return (selTens || 0) + (selUnit || 0);
@@ -188,6 +261,38 @@
       const isTens = b.dataset.tens !== undefined && parseInt(b.dataset.tens, 10) === selTens;
       const isUnit = b.dataset.unit !== undefined && parseInt(b.dataset.unit, 10) === selUnit;
       b.classList.toggle('active', isTens || isUnit);
+    });
+
+    renderHistory();
+  }
+
+  function renderHistory() {
+    histList.innerHTML = '';
+    history.forEach(h => {
+      const row = document.createElement('div');
+      row.className = 'hist-item ' + h.player;
+
+      const no = document.createElement('span');
+      no.className = 'no';
+      no.textContent = h.no;
+
+      const a = document.createElement('span');
+      a.className = 'a';
+      a.textContent = h.player === 'allein' ? h.pts : '';
+
+      const g = document.createElement('span');
+      g.className = 'g';
+      g.textContent = h.player === 'gegen' ? h.pts : '';
+
+      const t = document.createElement('span');
+      t.className = 't';
+      t.textContent = h.trumpf;
+
+      row.appendChild(no);
+      row.appendChild(a);
+      row.appendChild(g);
+      row.appendChild(t);
+      histList.appendChild(row);
     });
   }
 
@@ -213,21 +318,25 @@
     });
   });
 
-  function commit(addToScore) {
-    addToScore(entryValue());
+  function commit(player) {
+    const pts = entryValue();
+    if (pts === 0) return;   // Eintrag ohne Punkte nicht erlaubt
+    if (player === 'allein') scoreAllein += pts;
+    else                     scoreGegen += pts;
     trumpfTotal += trumpf;
+
+    roundCounter += 1;
+    history.unshift({ no: roundCounter, player: player, pts: pts, trumpf: trumpf });
+    if (history.length > MAX_HISTORY) history.length = MAX_HISTORY;
+
     selTens = null;
     selUnit = null;
     trumpf = 0;
     render();
   }
 
-  document.getElementById('toAllein').addEventListener('click', () => {
-    commit(v => scoreAllein += v);
-  });
-  document.getElementById('toGegen').addEventListener('click', () => {
-    commit(v => scoreGegen += v);
-  });
+  document.getElementById('toAllein').addEventListener('click', () => commit('allein'));
+  document.getElementById('toGegen').addEventListener('click', () => commit('gegen'));
 
   // Alles zurücksetzen
   document.getElementById('reset').addEventListener('click', () => {
@@ -237,6 +346,8 @@
     selTens = null;
     selUnit = null;
     trumpf = 0;
+    history = [];
+    roundCounter = 0;
     render();
   });
 
