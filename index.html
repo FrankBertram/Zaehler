@@ -215,7 +215,7 @@
     <button class="reset" id="reset">Reset</button>
   </div>
 
-  <div class="voicebar" id="voicebar">Spracheingabe aus – 🎤 antippen. Sag z.&nbsp;B. „Allein 34 2" oder „Gegner 25 1".</div>
+  <div class="voicebar" id="voicebar">Spracheingabe aus – 🎤 antippen. Sag z.&nbsp;B. „Allein vierzehn, zwei" oder „Gegner 25, 1".</div>
 
   <div class="main">
     <div class="assign">
@@ -437,20 +437,37 @@
     return null;
   }
 
+  function numbersIn(str) {
+    const out = [];
+    str.split(/[^a-z0-9]+/).filter(Boolean).forEach(tok => {
+      const n = wordToNumber(tok);
+      if (n != null) out.push(n);
+    });
+    return out;
+  }
+
   function parsePhrase(text) {
     const t = normalize(text);
     let player = null;
     if (t.includes('allein')) player = 'allein';
     else if (t.includes('gegen') || t.includes('gegn')) player = 'gegen';
+    if (player === null) return null;
 
-    const nums = [];
-    t.split(/[^a-z0-9]+/).filter(Boolean).forEach(tok => {
-      const n = wordToNumber(tok);
-      if (n != null) nums.push(n);
-    });
+    let pts = null, tr = 0;
+    const sep = t.search(/,|\bkomma\b/);   // Komma (Zeichen oder Wort) trennt Punkte | Trümpfe
+    if (sep >= 0) {
+      const before = numbersIn(t.slice(0, sep));
+      const after  = numbersIn(t.replace(/^.*?(,|\bkomma\b)/, ''));
+      if (before.length) pts = before[0];
+      if (after.length)  tr  = after[0];
+    } else {
+      const nums = numbersIn(t);           // ohne Komma: 1. Zahl = Punkte, 2. = Trümpfe
+      if (nums.length) pts = nums[0];
+      if (nums.length > 1) tr = nums[1];
+    }
 
-    if (player === null || nums.length === 0) return null;
-    return { player: player, pts: nums[0], trumpf: Math.min(3, nums[1] || 0) };
+    if (pts == null) return null;
+    return { player: player, pts: pts, trumpf: Math.min(3, tr) };
   }
 
   function handleSpeech(text) {
@@ -494,7 +511,7 @@
     }
     listening = true;
     micBtn.classList.add('on');
-    setStatus('🎤 hört zu … sag z. B. „Allein 34 2"');
+    setStatus('🎤 hört zu … sag z. B. „Allein vierzehn, zwei"');
     try { recog.start(); } catch (_) {}
   }
 
