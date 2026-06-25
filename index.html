@@ -81,7 +81,7 @@
     grid-template-rows: repeat(4, 1fr);
     gap: 12px;
   }
-  .pad button { font-size: 40px; }
+  .pad button { font-size: 56px; }
   .pad .tens { background: #495267; }
   .pad button.active { background: #e0a82e; color: #1b1f27; }
 
@@ -92,7 +92,7 @@
     flex-direction: column;
     gap: 12px;
   }
-  .trumpf button { flex: 1; font-size: 34px; }
+  .trumpf button { flex: 1; font-size: 46px; }
   .trumpf button.active { background: #36b37e; color: #fff; }
 
   /* Spieler-Buttons (untereinander links) */
@@ -320,7 +320,6 @@
 
   function commit(player) {
     const pts = entryValue();
-    if (pts === 0) return;   // Eintrag ohne Punkte nicht erlaubt
     if (player === 'allein') scoreAllein += pts;
     else                     scoreGegen += pts;
     trumpfTotal += trumpf;
