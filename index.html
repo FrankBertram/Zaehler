@@ -215,7 +215,7 @@
     <button class="reset" id="reset">Reset</button>
   </div>
 
-  <div class="voicebar" id="voicebar">Spracheingabe aus – 🎤 antippen. Sag z.&nbsp;B. „Allein vierzehn, zwei" oder „Gegner 25, 1".</div>
+  <div class="voicebar" id="voicebar">Spracheingabe aus – 🎤 antippen. „15, 2" = Allein · „minus 14, 1" = Gegner</div>
 
   <div class="main">
     <div class="assign">
@@ -448,10 +448,16 @@
 
   function parsePhrase(text) {
     const t = normalize(text);
+
+    // Spieler bestimmen: Schlüsselwort hat Vorrang, sonst entscheidet das Vorzeichen
+    // (positiv -> Alleinspieler, "minus"/negativ -> Gegenspieler)
     let player = null;
     if (t.includes('allein')) player = 'allein';
     else if (t.includes('gegen') || t.includes('gegn')) player = 'gegen';
-    if (player === null) return null;
+    if (player === null) {
+      const negative = /minus|-\s*\d/.test(t);
+      player = negative ? 'gegen' : 'allein';
+    }
 
     let pts = null, tr = 0;
     const sep = t.search(/,|\bkomma\b/);   // Komma (Zeichen oder Wort) trennt Punkte | Trümpfe
@@ -486,37 +492,48 @@
     setStatus('? nicht erkannt: „' + text + '"', 'bad');
   }
 
+  let restartTimer = null;
+
+  function safeStart() {
+    try { recog.start(); } catch (_) { /* evtl. schon gestartet – ignorieren */ }
+  }
+
   function startListening() {
     if (!SR) { setStatus('Spracherkennung wird hier nicht unterstützt.', 'bad'); return; }
     if (!recog) {
       recog = new SR();
       recog.lang = 'de-DE';
-      recog.continuous = true;
+      recog.continuous = false;      // iOS Safari unterstützt "continuous" nicht zuverlässig
       recog.interimResults = false;
       recog.onresult = e => {
         const res = e.results[e.results.length - 1];
         if (res && res.isFinal) handleSpeech(res[0].transcript.trim());
       };
       recog.onerror = e => {
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          setStatus('Mikrofon-Zugriff verweigert (nur über HTTPS möglich).', 'bad');
+        if (e.error === 'not-allowed') {
+          // echte Berechtigungs-Ablehnung -> beenden
+          setStatus('Mikrofon-Zugriff verweigert. In Safari unter „aA" / Einstellungen erlauben.', 'bad');
           stopListening();
-        } else if (e.error === 'no-speech') {
-          // ignorieren, läuft per onend weiter
-        } else {
-          setStatus('Fehler: ' + e.error, 'bad');
+        }
+        // no-speech / aborted / service-not-allowed: auf iOS oft harmlos -> Schleife läuft via onend weiter
+      };
+      recog.onend = () => {
+        // pro Äußerung endet die Erkennung -> automatisch neu starten, solange aktiv
+        if (listening) {
+          clearTimeout(restartTimer);
+          restartTimer = setTimeout(safeStart, 300);
         }
       };
-      recog.onend = () => { if (listening) { try { recog.start(); } catch (_) {} } };
     }
     listening = true;
     micBtn.classList.add('on');
-    setStatus('🎤 hört zu … sag z. B. „Allein vierzehn, zwei"');
-    try { recog.start(); } catch (_) {}
+    setStatus('🎤 hört zu … „15, 2" = Allein · „minus 14, 1" = Gegner');
+    safeStart();
   }
 
   function stopListening() {
     listening = false;
+    clearTimeout(restartTimer);
     micBtn.classList.remove('on');
     if (recog) { try { recog.stop(); } catch (_) {} }
     setStatus('Spracheingabe aus – 🎤 antippen zum Starten.');
