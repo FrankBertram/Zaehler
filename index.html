@@ -2,117 +2,109 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Punktezähler</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
   body {
-    margin: 0;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     background: #1b1f27;
     color: #f0f2f5;
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
+    overflow: hidden;
   }
   .app {
-    width: 100%;
-    max-width: 480px;
-    padding: 16px;
+    height: 100vh;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 14px;
+    padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
-  /* Punktestände + Trümpfe gesamt (oben nebeneinander) */
+  /* Punktestände + Trümpfe gesamt + Reset (obere Leiste) */
   .scores {
     display: flex;
-    gap: 10px;
-    margin-bottom: 14px;
+    gap: 12px;
+    flex: 0 0 auto;
   }
   .score {
     flex: 1;
     background: #262c38;
-    border-radius: 14px;
-    padding: 14px 8px;
+    border-radius: 16px;
+    padding: 12px 8px;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
-  .score .label {
-    font-size: 13px;
-    opacity: 0.75;
-    margin-bottom: 6px;
-  }
-  .score .value {
-    font-size: 34px;
-    font-weight: 700;
-    line-height: 1;
-  }
+  .score .label { font-size: 16px; opacity: 0.75; margin-bottom: 4px; }
+  .score .value { font-size: 44px; font-weight: 700; line-height: 1; }
   .score.allein { box-shadow: inset 0 0 0 2px #4f8cff; }
   .score.gegen  { box-shadow: inset 0 0 0 2px #ff8a4f; }
   .score.trumpf-total { box-shadow: inset 0 0 0 2px #36b37e; }
   .score.trumpf-total .value { color: #36b37e; }
-
-  /* Zahlenblock + Trumpf-Spalte nebeneinander */
-  .play-row {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 14px;
+  .scores .reset {
+    flex: 0 0 120px;
+    font-size: 20px;
+    padding: 0;
+    background: #c8453c;
   }
 
-  /* Trumpf-Auswahl der Runde (senkrechte Spalte) */
-  .trumpf {
-    background: #262c38;
-    border-radius: 14px;
-    padding: 10px;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    width: 84px;
-  }
-  .trumpf .label { font-size: 12px; opacity: 0.7; margin-bottom: 8px; }
-  .trumpf .opts {
+  /* Hauptbereich füllt die restliche Höhe */
+  .main {
     flex: 1;
+    min-height: 0;
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
-  .trumpf .opts button { flex: 1; background: #3a4254; padding: 0; }
-  .trumpf .opts button.active { background: #36b37e; }
 
-  /* Zahlen-Buttons 3x4 */
-  .pad {
-    flex: 1;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-  }
   button {
     border: none;
-    border-radius: 14px;
-    font-size: 24px;
+    border-radius: 16px;
     font-weight: 600;
-    padding: 22px 0;
     color: #f0f2f5;
     background: #3a4254;
     cursor: pointer;
     transition: transform 0.05s, filter 0.1s, background 0.1s;
   }
-  button:active { transform: scale(0.95); filter: brightness(1.2); }
+  button:active { transform: scale(0.96); filter: brightness(1.2); }
+
+  /* Zahlenblock 3x4 – füllt Breite und Höhe */
+  .pad {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .pad button { font-size: 40px; }
   .pad .tens { background: #495267; }
-  /* Hervorhebung der gewählten Ziffer im Zifferblock */
   .pad button.active { background: #e0a82e; color: #1b1f27; }
 
-  /* Zuweisungs-Buttons */
-  .assign {
+  /* Trumpf-Spalte (0-3 untereinander) */
+  .trumpf {
+    flex: 0 0 130px;
     display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
+    flex-direction: column;
+    gap: 12px;
   }
-  .assign button { flex: 1; font-size: 18px; padding: 20px 0; }
+  .trumpf button { flex: 1; font-size: 34px; }
+  .trumpf button.active { background: #36b37e; color: #fff; }
+
+  /* Spieler-Buttons (untereinander rechts) */
+  .assign {
+    flex: 0 0 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .assign button { flex: 1; font-size: 26px; line-height: 1.2; }
   .assign .allein { background: #4f8cff; }
   .assign .gegen  { background: #ff8a4f; }
-
-  .bottom { display: flex; gap: 10px; }
-  .bottom button { flex: 1; font-size: 16px; padding: 16px 0; }
-  .clear { background: #555c6b; }
-  .reset { background: #c8453c; }
 </style>
 </head>
 <body>
@@ -131,9 +123,15 @@
       <div class="label">Trümpfe</div>
       <div class="value" id="trumpfTotal">0</div>
     </div>
+    <button class="reset" id="reset">Reset</button>
   </div>
 
-  <div class="play-row">
+  <div class="main">
+    <div class="assign">
+      <button class="allein" id="toAllein">+ Alleinspieler</button>
+      <button class="gegen" id="toGegen">+ Gegenspieler</button>
+    </div>
+
     <div class="pad">
       <button class="tens" data-tens="10">10</button>
       <button class="tens" data-tens="20">20</button>
@@ -148,25 +146,13 @@
       <button data-unit="8">8</button>
       <button data-unit="9">9</button>
     </div>
-    <div class="trumpf">
-      <div class="label">Trümpfe</div>
-      <div class="opts" id="trumpfOpts">
-        <button data-trumpf="0">0</button>
-        <button data-trumpf="1">1</button>
-        <button data-trumpf="2">2</button>
-        <button data-trumpf="3">3</button>
-      </div>
+
+    <div class="trumpf" id="trumpfOpts">
+      <button data-trumpf="0">0</button>
+      <button data-trumpf="1">1</button>
+      <button data-trumpf="2">2</button>
+      <button data-trumpf="3">3</button>
     </div>
-  </div>
-
-  <div class="assign">
-    <button class="allein" id="toAllein">+ Alleinspieler</button>
-    <button class="gegen" id="toGegen">+ Gegenspieler</button>
-  </div>
-
-  <div class="bottom">
-    <button class="clear" id="clear">Auswahl löschen</button>
-    <button class="reset" id="reset">Reset</button>
   </div>
 
 </div>
@@ -241,14 +227,6 @@
   });
   document.getElementById('toGegen').addEventListener('click', () => {
     commit(v => scoreGegen += v);
-  });
-
-  // Nur aktuelle Auswahl löschen (Ziffern + Rundentrumpf)
-  document.getElementById('clear').addEventListener('click', () => {
-    selTens = null;
-    selUnit = null;
-    trumpf = 0;
-    render();
   });
 
   // Alles zurücksetzen
