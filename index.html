@@ -493,9 +493,18 @@
   }
 
   let restartTimer = null;
+  let trail = [];
+
+  // Diagnose: zeigt die Abfolge der Erkennungs-Ereignisse in der Statuszeile
+  function ev(tag, cls) {
+    trail.push(tag);
+    if (trail.length > 7) trail = trail.slice(-7);
+    setStatus(trail.join(' › '), cls);
+  }
 
   function safeStart() {
-    try { recog.start(); } catch (_) { /* evtl. schon gestartet – ignorieren */ }
+    try { recog.start(); ev('start'); }
+    catch (err) { ev('start-EXC:' + (err && err.name)); }
   }
 
   function startListening() {
@@ -503,31 +512,35 @@
     if (!recog) {
       recog = new SR();
       recog.lang = 'de-DE';
-      recog.continuous = false;      // iOS Safari unterstützt "continuous" nicht zuverlässig
+      recog.continuous = false;
       recog.interimResults = false;
+      recog.onaudiostart  = () => ev('audio');
+      recog.onspeechstart = () => ev('sprache');
+      recog.onspeechend   = () => ev('sprache-ende');
+      recog.onnomatch     = () => ev('nomatch');
       recog.onresult = e => {
         const res = e.results[e.results.length - 1];
-        if (res && res.isFinal) handleSpeech(res[0].transcript.trim());
+        const txt = res && res[0] ? res[0].transcript.trim() : '';
+        ev('»' + txt + '«');
+        if (res && res.isFinal) handleSpeech(txt);
       };
       recog.onerror = e => {
-        if (e.error === 'not-allowed') {
-          // echte Berechtigungs-Ablehnung -> beenden
-          setStatus('Mikrofon-Zugriff verweigert. In Safari unter „aA" / Einstellungen erlauben.', 'bad');
-          stopListening();
-        }
-        // no-speech / aborted / service-not-allowed: auf iOS oft harmlos -> Schleife läuft via onend weiter
+        ev('FEHLER:' + e.error, 'bad');
+        if (e.error === 'not-allowed') stopListening();
       };
       recog.onend = () => {
-        // pro Äußerung endet die Erkennung -> automatisch neu starten, solange aktiv
+        ev('ende');
         if (listening) {
           clearTimeout(restartTimer);
-          restartTimer = setTimeout(safeStart, 300);
+          restartTimer = setTimeout(safeStart, 350);   // automatisch weiter lauschen
+        } else {
+          micBtn.classList.remove('on');
         }
       };
     }
     listening = true;
+    trail = [];
     micBtn.classList.add('on');
-    setStatus('🎤 hört zu … „15, 2" = Allein · „minus 14, 1" = Gegner');
     safeStart();
   }
 
@@ -535,7 +548,7 @@
     listening = false;
     clearTimeout(restartTimer);
     micBtn.classList.remove('on');
-    if (recog) { try { recog.stop(); } catch (_) {} }
+    if (recog) { try { recog.abort(); } catch (_) {} }
     setStatus('Spracheingabe aus – 🎤 antippen zum Starten.');
   }
 
