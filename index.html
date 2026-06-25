@@ -53,6 +53,36 @@
     padding: 0;
     background: #c8453c;
   }
+  .scores .mic {
+    flex: 0 0 86px;
+    font-size: 30px;
+    padding: 0;
+    background: #3a4254;
+  }
+  .scores .mic.on {
+    background: #36b37e;
+    animation: micpulse 1.1s ease-in-out infinite;
+  }
+  @keyframes micpulse {
+    0%, 100% { filter: brightness(1); }
+    50%      { filter: brightness(1.4); }
+  }
+
+  /* Status-/Erkennungszeile */
+  .voicebar {
+    flex: 0 0 auto;
+    font-size: 16px;
+    color: #cdd3dd;
+    background: #222834;
+    border-radius: 10px;
+    padding: 6px 12px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .voicebar.ok  { color: #8fe3b8; }
+  .voicebar.bad { color: #ffb27a; }
 
   /* Hauptbereich füllt die restliche Höhe */
   .main {
@@ -181,8 +211,11 @@
       <div class="label">Trümpfe</div>
       <div class="value" id="trumpfTotal">0</div>
     </div>
+    <button class="mic" id="mic" title="Spracheingabe an/aus">🎤</button>
     <button class="reset" id="reset">Reset</button>
   </div>
+
+  <div class="voicebar" id="voicebar">Spracheingabe aus – 🎤 antippen. Sag z.&nbsp;B. „Allein 34 2" oder „Gegner 25 1".</div>
 
   <div class="main">
     <div class="assign">
@@ -338,7 +371,7 @@
   document.getElementById('toGegen').addEventListener('click', () => commit('gegen'));
 
   // Alles zurücksetzen
-  document.getElementById('reset').addEventListener('click', () => {
+  function doReset() {
     scoreAllein = 0;
     scoreGegen = 0;
     trumpfTotal = 0;
@@ -349,7 +382,136 @@
     roundCounter = 0;
     render();
     renderHistory();
-  });
+  }
+  document.getElementById('reset').addEventListener('click', doReset);
+
+  // Eine komplette Runde direkt buchen (für Spracheingabe)
+  function bookRound(player, pts, trVal) {
+    if (player === 'allein') scoreAllein += pts;
+    else                     scoreGegen += pts;
+    trumpfTotal += trVal;
+    roundCounter += 1;
+    history.unshift({ no: roundCounter, player: player, pts: pts, trumpf: trVal });
+    if (history.length > MAX_HISTORY) history.length = MAX_HISTORY;
+    render();
+    renderHistory();
+  }
+
+  /* ---------- Spracherkennung ---------- */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const micBtn   = document.getElementById('mic');
+  const voicebar = document.getElementById('voicebar');
+  let recog = null;
+  let listening = false;
+
+  function setStatus(text, cls) {
+    voicebar.textContent = text;
+    voicebar.className = 'voicebar' + (cls ? ' ' + cls : '');
+  }
+
+  function normalize(s) {
+    return s.toLowerCase()
+      .replace(/ß/g, 'ss')
+      .replace(/ä/g, 'ae')
+      .replace(/ö/g, 'oe')
+      .replace(/ü/g, 'ue');
+  }
+
+  // deutsche Zahlwörter 0–99
+  const WORDS = {
+    null:0, ein:1, eins:1, eine:1, zwei:2, zwo:2, drei:3, vier:4, fuenf:5,
+    sechs:6, sieben:7, acht:8, neun:9,
+    zehn:10, elf:11, zwoelf:12, dreizehn:13, vierzehn:14, fuenfzehn:15,
+    sechzehn:16, siebzehn:17, achtzehn:18, neunzehn:19,
+    zwanzig:20, dreissig:30, vierzig:40, fuenfzig:50, sechzig:60,
+    siebzig:70, achtzig:80, neunzig:90
+  };
+
+  function wordToNumber(tok) {
+    if (/^\d+$/.test(tok)) return parseInt(tok, 10);
+    if (tok in WORDS) return WORDS[tok];
+    const m = tok.match(/^(.+?)und(.+)$/);   // z. B. vierunddreissig
+    if (m && WORDS[m[1]] != null && WORDS[m[2]] != null) {
+      return WORDS[m[2]] + WORDS[m[1]];
+    }
+    return null;
+  }
+
+  function parsePhrase(text) {
+    const t = normalize(text);
+    let player = null;
+    if (t.includes('allein')) player = 'allein';
+    else if (t.includes('gegen') || t.includes('gegn')) player = 'gegen';
+
+    const nums = [];
+    t.split(/[^a-z0-9]+/).filter(Boolean).forEach(tok => {
+      const n = wordToNumber(tok);
+      if (n != null) nums.push(n);
+    });
+
+    if (player === null || nums.length === 0) return null;
+    return { player: player, pts: nums[0], trumpf: Math.min(3, nums[1] || 0) };
+  }
+
+  function handleSpeech(text) {
+    const p = parsePhrase(text);
+    if (p) {
+      bookRound(p.player, p.pts, p.trumpf);
+      setStatus('✓ ' + (p.player === 'allein' ? 'Allein' : 'Gegen') +
+                ' ' + p.pts + ' · ' + p.trumpf + 'T  („' + text + '")', 'ok');
+      return;
+    }
+    if (/\b(reset|zuruecksetzen|loeschen)\b/.test(normalize(text))) {
+      doReset();
+      setStatus('✓ Reset („' + text + '")', 'ok');
+      return;
+    }
+    setStatus('? nicht erkannt: „' + text + '"', 'bad');
+  }
+
+  function startListening() {
+    if (!SR) { setStatus('Spracherkennung wird hier nicht unterstützt.', 'bad'); return; }
+    if (!recog) {
+      recog = new SR();
+      recog.lang = 'de-DE';
+      recog.continuous = true;
+      recog.interimResults = false;
+      recog.onresult = e => {
+        const res = e.results[e.results.length - 1];
+        if (res && res.isFinal) handleSpeech(res[0].transcript.trim());
+      };
+      recog.onerror = e => {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          setStatus('Mikrofon-Zugriff verweigert (nur über HTTPS möglich).', 'bad');
+          stopListening();
+        } else if (e.error === 'no-speech') {
+          // ignorieren, läuft per onend weiter
+        } else {
+          setStatus('Fehler: ' + e.error, 'bad');
+        }
+      };
+      recog.onend = () => { if (listening) { try { recog.start(); } catch (_) {} } };
+    }
+    listening = true;
+    micBtn.classList.add('on');
+    setStatus('🎤 hört zu … sag z. B. „Allein 34 2"');
+    try { recog.start(); } catch (_) {}
+  }
+
+  function stopListening() {
+    listening = false;
+    micBtn.classList.remove('on');
+    if (recog) { try { recog.stop(); } catch (_) {} }
+    setStatus('Spracheingabe aus – 🎤 antippen zum Starten.');
+  }
+
+  if (!SR) {
+    micBtn.disabled = true;
+    micBtn.style.opacity = 0.4;
+    setStatus('Spracherkennung wird von diesem Browser nicht unterstützt.', 'bad');
+  } else {
+    micBtn.addEventListener('click', () => listening ? stopListening() : startListening());
+  }
 
   render();
   renderHistory();
