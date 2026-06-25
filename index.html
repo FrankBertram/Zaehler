@@ -477,6 +477,15 @@
   }
 
   function handleSpeech(text) {
+    const n = normalize(text);
+
+    // Reset-Befehle zuerst prüfen (enthalten teils eine Zahl, z. B. "auf 0 setzen")
+    if (/\breset\b|zuruecksetzen|loeschen|auf\s*(0|null)\s*setzen/.test(n)) {
+      doReset();
+      setStatus('✓ Zurückgesetzt („' + text + '")', 'ok');
+      return;
+    }
+
     const p = parsePhrase(text);
     if (p) {
       bookRound(p.player, p.pts, p.trumpf);
@@ -484,27 +493,13 @@
                 ' ' + p.pts + ' · ' + p.trumpf + 'T  („' + text + '")', 'ok');
       return;
     }
-    if (/\b(reset|zuruecksetzen|loeschen)\b/.test(normalize(text))) {
-      doReset();
-      setStatus('✓ Reset („' + text + '")', 'ok');
-      return;
-    }
     setStatus('? nicht erkannt: „' + text + '"', 'bad');
   }
 
   let restartTimer = null;
-  let trail = [];
-
-  // Diagnose: zeigt die Abfolge der Erkennungs-Ereignisse in der Statuszeile
-  function ev(tag, cls) {
-    trail.push(tag);
-    if (trail.length > 7) trail = trail.slice(-7);
-    setStatus(trail.join(' › '), cls);
-  }
 
   function safeStart() {
-    try { recog.start(); ev('start'); }
-    catch (err) { ev('start-EXC:' + (err && err.name)); }
+    try { recog.start(); } catch (_) { /* evtl. schon gestartet – ignorieren */ }
   }
 
   function startListening() {
@@ -514,33 +509,29 @@
       recog.lang = 'de-DE';
       recog.continuous = false;
       recog.interimResults = false;
-      recog.onaudiostart  = () => ev('audio');
-      recog.onspeechstart = () => ev('sprache');
-      recog.onspeechend   = () => ev('sprache-ende');
-      recog.onnomatch     = () => ev('nomatch');
       recog.onresult = e => {
         const res = e.results[e.results.length - 1];
-        const txt = res && res[0] ? res[0].transcript.trim() : '';
-        ev('»' + txt + '«');
-        if (res && res.isFinal) handleSpeech(txt);
+        if (res && res.isFinal) handleSpeech(res[0].transcript.trim());
       };
       recog.onerror = e => {
-        ev('FEHLER:' + e.error, 'bad');
-        if (e.error === 'not-allowed') stopListening();
+        if (e.error === 'not-allowed') {
+          setStatus('Mikrofon-Zugriff verweigert.', 'bad');
+          stopListening();
+        }
+        // transiente iOS-/Chrome-Fehler (no-speech, aborted, service-not-allowed) -> ignorieren
       };
       recog.onend = () => {
-        ev('ende');
         if (listening) {
           clearTimeout(restartTimer);
-          restartTimer = setTimeout(safeStart, 350);   // automatisch weiter lauschen
+          restartTimer = setTimeout(safeStart, 300);   // automatisch weiter lauschen
         } else {
           micBtn.classList.remove('on');
         }
       };
     }
     listening = true;
-    trail = [];
     micBtn.classList.add('on');
+    setStatus('🎤 hört zu … „15, 2" = Allein · „minus 14, 1" = Gegner');
     safeStart();
   }
 
