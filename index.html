@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Punktezähler</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #1b1f27;
+    color: #f0f2f5;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+  }
+  .app {
+    width: 100%;
+    max-width: 480px;
+    padding: 16px;
+  }
+
+  /* Punktestände + Trümpfe gesamt (oben nebeneinander) */
+  .scores {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .score {
+    flex: 1;
+    background: #262c38;
+    border-radius: 14px;
+    padding: 14px 8px;
+    text-align: center;
+  }
+  .score .label {
+    font-size: 13px;
+    opacity: 0.75;
+    margin-bottom: 6px;
+  }
+  .score .value {
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .score.allein { box-shadow: inset 0 0 0 2px #4f8cff; }
+  .score.gegen  { box-shadow: inset 0 0 0 2px #ff8a4f; }
+  .score.trumpf-total { box-shadow: inset 0 0 0 2px #36b37e; }
+  .score.trumpf-total .value { color: #36b37e; }
+
+  /* Zahlenblock + Trumpf-Spalte nebeneinander */
+  .play-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  /* Trumpf-Auswahl der Runde (senkrechte Spalte) */
+  .trumpf {
+    background: #262c38;
+    border-radius: 14px;
+    padding: 10px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    width: 84px;
+  }
+  .trumpf .label { font-size: 12px; opacity: 0.7; margin-bottom: 8px; }
+  .trumpf .opts {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .trumpf .opts button { flex: 1; background: #3a4254; padding: 0; }
+  .trumpf .opts button.active { background: #36b37e; }
+
+  /* Zahlen-Buttons 3x4 */
+  .pad {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  button {
+    border: none;
+    border-radius: 14px;
+    font-size: 24px;
+    font-weight: 600;
+    padding: 22px 0;
+    color: #f0f2f5;
+    background: #3a4254;
+    cursor: pointer;
+    transition: transform 0.05s, filter 0.1s, background 0.1s;
+  }
+  button:active { transform: scale(0.95); filter: brightness(1.2); }
+  .pad .tens { background: #495267; }
+  /* Hervorhebung der gewählten Ziffer im Zifferblock */
+  .pad button.active { background: #e0a82e; color: #1b1f27; }
+
+  /* Zuweisungs-Buttons */
+  .assign {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .assign button { flex: 1; font-size: 18px; padding: 20px 0; }
+  .assign .allein { background: #4f8cff; }
+  .assign .gegen  { background: #ff8a4f; }
+
+  .bottom { display: flex; gap: 10px; }
+  .bottom button { flex: 1; font-size: 16px; padding: 16px 0; }
+  .clear { background: #555c6b; }
+  .reset { background: #c8453c; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="scores">
+    <div class="score allein">
+      <div class="label">Alleinspieler</div>
+      <div class="value" id="scoreAllein">0</div>
+    </div>
+    <div class="score gegen">
+      <div class="label">Gegenspieler</div>
+      <div class="value" id="scoreGegen">0</div>
+    </div>
+    <div class="score trumpf-total">
+      <div class="label">Trümpfe</div>
+      <div class="value" id="trumpfTotal">0</div>
+    </div>
+  </div>
+
+  <div class="play-row">
+    <div class="pad">
+      <button class="tens" data-tens="10">10</button>
+      <button class="tens" data-tens="20">20</button>
+      <button class="tens" data-tens="30">30</button>
+      <button data-unit="1">1</button>
+      <button data-unit="2">2</button>
+      <button data-unit="3">3</button>
+      <button data-unit="4">4</button>
+      <button data-unit="5">5</button>
+      <button data-unit="6">6</button>
+      <button data-unit="7">7</button>
+      <button data-unit="8">8</button>
+      <button data-unit="9">9</button>
+    </div>
+    <div class="trumpf">
+      <div class="label">Trümpfe</div>
+      <div class="opts" id="trumpfOpts">
+        <button data-trumpf="0">0</button>
+        <button data-trumpf="1">1</button>
+        <button data-trumpf="2">2</button>
+        <button data-trumpf="3">3</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="assign">
+    <button class="allein" id="toAllein">+ Alleinspieler</button>
+    <button class="gegen" id="toGegen">+ Gegenspieler</button>
+  </div>
+
+  <div class="bottom">
+    <button class="clear" id="clear">Auswahl löschen</button>
+    <button class="reset" id="reset">Reset</button>
+  </div>
+
+</div>
+
+<script>
+  let scoreAllein = 0;
+  let scoreGegen = 0;
+  let trumpfTotal = 0;
+
+  let selTens = null;   // 10, 20 oder 30
+  let selUnit = null;   // 1 bis 9
+  let trumpf = 0;       // Trümpfe der aktuellen Runde (0-3)
+
+  const allEl    = document.getElementById('scoreAllein');
+  const gegEl    = document.getElementById('scoreGegen');
+  const trTotEl  = document.getElementById('trumpfTotal');
+  const trumpfOpts = document.getElementById('trumpfOpts');
+  const padBtns  = document.querySelectorAll('.pad button');
+
+  function entryValue() {
+    return (selTens || 0) + (selUnit || 0);
+  }
+
+  function render() {
+    allEl.textContent   = scoreAllein;
+    gegEl.textContent   = scoreGegen;
+    trTotEl.textContent = trumpfTotal;
+
+    trumpfOpts.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.trumpf, 10) === trumpf);
+    });
+    padBtns.forEach(b => {
+      const isTens = b.dataset.tens !== undefined && parseInt(b.dataset.tens, 10) === selTens;
+      const isUnit = b.dataset.unit !== undefined && parseInt(b.dataset.unit, 10) === selUnit;
+      b.classList.toggle('active', isTens || isUnit);
+    });
+  }
+
+  // Trumpf-Auswahl der Runde
+  trumpfOpts.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      trumpf = parseInt(btn.dataset.trumpf, 10);
+      render();
+    });
+  });
+
+  // Zifferblock: je ein Wert aus 10/20/30 und einer aus 1-9 (Toggle)
+  padBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.tens) {
+        const v = parseInt(btn.dataset.tens, 10);
+        selTens = (selTens === v) ? null : v;
+      } else {
+        const v = parseInt(btn.dataset.unit, 10);
+        selUnit = (selUnit === v) ? null : v;
+      }
+      render();
+    });
+  });
+
+  function commit(addToScore) {
+    addToScore(entryValue());
+    trumpfTotal += trumpf;
+    selTens = null;
+    selUnit = null;
+    trumpf = 0;
+    render();
+  }
+
+  document.getElementById('toAllein').addEventListener('click', () => {
+    commit(v => scoreAllein += v);
+  });
+  document.getElementById('toGegen').addEventListener('click', () => {
+    commit(v => scoreGegen += v);
+  });
+
+  // Nur aktuelle Auswahl löschen (Ziffern + Rundentrumpf)
+  document.getElementById('clear').addEventListener('click', () => {
+    selTens = null;
+    selUnit = null;
+    trumpf = 0;
+    render();
+  });
+
+  // Alles zurücksetzen
+  document.getElementById('reset').addEventListener('click', () => {
+    scoreAllein = 0;
+    scoreGegen = 0;
+    trumpfTotal = 0;
+    selTens = null;
+    selUnit = null;
+    trumpf = 0;
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>
